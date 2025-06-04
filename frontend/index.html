@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simple Webcam Sign Recognizer</title>
+    <!-- Tailwind CSS CDN for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts - Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Ensure video and canvas fill their container and are mirrored */
+        video, canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror the video/image */
+            border-radius: 0.5rem; /* rounded-lg */
+        }
+        /* Hide the canvas used for capture */
+        #captureCanvas {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex flex-col items-center justify-center p-4 text-gray-800">
+
+    <div class="bg-white rounded-xl shadow-2xl p-8 max-w-4xl w-full text-center space-y-6">
+        <h1 class="text-4xl font-bold text-indigo-700 mb-4">Simple Sign Language Recognizer</h1>
+
+        <p id="statusMessage" class="text-lg text-gray-600">Click 'Start Camera' to begin.</p>
+
+        <!-- New Flex Container for Side-by-Side Layout (Webcam & Preview) -->
+        <div class="flex flex-col md:flex-row gap-4 items-start">
+            <!-- Left Column: Webcam Video Feed -->
+            <div class="w-full md:w-1/2 relative aspect-video bg-gray-200 rounded-lg overflow-hidden border-2 border-indigo-300">
+                <video id="webcamVideo" autoplay playsinline muted></video>
+                <canvas id="captureCanvas"></canvas>
+            </div>
+
+            <!-- Right Column: Captured Image Preview -->
+            <div id="imagePreviewContainer" class="w-full md:w-1/2 mt-4 md:mt-0 hidden relative aspect-video bg-gray-200 rounded-lg overflow-hidden border-2 border-gray-300">
+                <h2 class="text-2xl font-semibold text-indigo-600 mb-3 absolute top-0 left-0 w-full bg-white bg-opacity-75 p-2 rounded-t-lg z-10">Captured Image Preview:</h2>
+                <img
+                    id="capturedImage"
+                    alt="Captured"
+                    class="w-full h-full object-cover rounded-lg mx-auto"
+                    style="transform: scaleX(-1);"
+                />
+            </div>
+        </div>
+
+        <!-- Control Buttons -->
+        <div class="flex flex-col sm:flex-row justify-center gap-4 mt-6">
+            <button
+                id="captureButton"
+                class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-opacity-75"
+                disabled
+            >
+                Capture Photo
+            </button>
+            <button
+                id="sendButton"
+                class="bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-opacity-75"
+                disabled
+            >
+                Send to Model
+            </button>
+        </div>
+
+        <!-- Health Check Button -->
+        <div class="mt-4">
+            <button
+                id="healthCheckButton"
+                class="bg-gray-500 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg shadow-md transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-opacity-75"
+            >
+                Health Check
+            </button>
+        </div>
+
+        <!-- New Flex Container for Side-by-Side Layout (Prediction & Health) -->
+        <div class="flex flex-col md:flex-row gap-4 mt-8">
+            <!-- Model Prediction Display -->
+            <div class="w-full md:w-1/2 bg-indigo-50 border-l-4 border-indigo-500 text-indigo-800 p-4 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold mb-2">Model Prediction:</h2>
+                <p id="predictionDisplay" class="text-3xl font-extrabold text-indigo-900">Waiting for prediction...</p>
+            </div>
+
+            <!-- Dedicated Health Check Status Display -->
+            <div id="healthStatusDisplayContainer" class="w-full md:w-1/2 bg-blue-50 border-l-4 border-blue-500 text-blue-800 p-4 rounded-lg shadow-inner">
+                <h2 class="text-2xl font-bold mb-2">Backend Health:</h2>
+                <p id="healthStatusDisplay" class="text-xl font-semibold text-blue-900">Not checked yet.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const webcamVideo = document.getElementById('webcamVideo');
+        const captureCanvas = document.getElementById('captureCanvas');
+        const captureButton = document.getElementById('captureButton');
+        const sendButton = document.getElementById('sendButton');
+        const healthCheckButton = document.getElementById('healthCheckButton');
+        const statusMessage = document.getElementById('statusMessage');
+        const capturedImagePreview = document.getElementById('capturedImage');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const predictionDisplay = document.getElementById('predictionDisplay');
+        const healthStatusDisplay = document.getElementById('healthStatusDisplay');
+
+        let currentStream;
+        let capturedImageDataURL = null;
+
+        const BACKEND_API_URL = 'http://localhost:8000'; // Ensure this matches your FastAPI backend port
+
+        function updateStatus(message) {
+            statusMessage.textContent = message;
+        }
+
+        function updateHealthStatus(message) {
+            healthStatusDisplay.textContent = message;
+        }
+
+        async function startCamera() {
+            try {
+                updateStatus("Starting camera...");
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                currentStream = stream;
+                webcamVideo.srcObject = stream;
+                webcamVideo.play();
+                webcamVideo.onloadedmetadata = () => {
+                    captureButton.disabled = false;
+                    updateStatus("Camera started. Click 'Capture Photo' to take a picture.");
+                };
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                updateStatus(`Error: Could not access camera. Please ensure permissions are granted. (${err.name})`);
+            }
+        }
+
+        function stopCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+                webcamVideo.srcObject = null;
+                currentStream = null;
+                captureButton.disabled = true;
+                sendButton.disabled = true;
+                updateStatus("Camera stopped.");
+            }
+        }
+
+        captureButton.addEventListener('click', () => {
+            if (webcamVideo.readyState === webcamVideo.HAVE_ENOUGH_DATA) {
+                captureCanvas.width = webcamVideo.videoWidth;
+                captureCanvas.height = webcamVideo.videoHeight;
+                const context = captureCanvas.getContext('2d');
+                context.drawImage(webcamVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+
+                capturedImageDataURL = captureCanvas.toDataURL('image/jpeg', 0.9);
+                capturedImagePreview.src = capturedImageDataURL;
+                imagePreviewContainer.classList.remove('hidden'); // Show preview container
+                sendButton.disabled = false; // Enable send button
+                updateStatus("Photo captured. Click 'Send to Model' to get a prediction.");
+                predictionDisplay.textContent = "Processing..."; // Reset prediction display
+            } else {
+                updateStatus("Camera not ready. Please wait a moment.");
+            }
+        });
+
+        sendButton.addEventListener('click', async () => {
+            if (!capturedImageDataURL) {
+                updateStatus("Please capture a photo first!");
+                return;
+            }
+
+            updateStatus("Sending image to model for prediction...");
+            predictionDisplay.textContent = "Processing...";
+
+            try {
+                const response = await fetch(`${BACKEND_API_URL}/predict`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ image: capturedImageDataURL }),
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`HTTP error! status: ${response.status}, Detail: ${errorData.detail || 'Unknown error'}`);
+                }
+
+                const data = await response.json();
+                if (data.prediction) {
+                    predictionDisplay.textContent = data.prediction;
+                    updateStatus("Prediction received!");
+                } else if (data.error) {
+                    predictionDisplay.textContent = `Error: ${data.error}`;
+                    updateStatus("Prediction failed.");
+                } else {
+                    predictionDisplay.textContent = "Unexpected response from model.";
+                    updateStatus("Prediction failed.");
+                }
+
+            } catch (error) {
+                console.error("Error sending image to model:", error);
+                predictionDisplay.textContent = "Error getting prediction.";
+                updateStatus(`Error: ${error.message}. Check console for details.`);
+            }
+        });
+
+        healthCheckButton.addEventListener('click', async () => {
+            updateHealthStatus("Checking backend health...");
+            try {
+                const response = await fetch(`${BACKEND_API_URL}/health`);
+
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+
+                const data = await response.json();
+                updateHealthStatus(`Status: ${data.status}, Message: ${data.message || 'No message provided.'}`);
+
+            } catch (error) {
+                console.error("Error during health check:", error);
+                updateHealthStatus(`Error: Could not reach backend. (${error.message})`);
+            }
+        });
+
+
+        // Start camera automatically when the page loads
+        window.addEventListener('load', startCamera);
+
+        // Optional: Stop camera when the user navigates away or closes the tab
+        window.addEventListener('beforeunload', stopCamera);
+
+    </script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+.\venv_signl\Scripts\activate  # On Windows
+source venv_signl/bin/activate # On macOS/Linux
+
+--------------------------------------------------
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+
+--------------------------------------------------
+Set-ExecutionPolicy RemoteSigned -Scope Process

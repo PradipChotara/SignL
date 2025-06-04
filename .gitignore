@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+*.env
+.idea/                  # For PyCharm/IntelliJ users
+.vscode/                # For VS Code users
+*.log
+*.sqlite3
+
+# Virtual Environments
+/venv_signl_py310_final
+
+# MediaPipe cache (can be large)
+.mediapipe/
