@@ -25,7 +25,7 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir "protobuf==3.20.3" && \
     pip install --no-cache-dir "mediapipe==0.10.9" && \
-    pip pip install --no-cache-dir -r requirements.txt
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy the entire application code into the container
 # The '.' at the end refers to the current directory (where Dockerfile is)
@@ -46,4 +46,3 @@ EXPOSE 8000
 # --workers 1 is good for development; for production, you might use more workers
 # --reload is NOT used in production Dockerfiles as it's for development
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
